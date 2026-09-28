@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GrantAgent</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#1a1a18;--paper:#f7f5f0;--card:#fff;
+  --sage:#3d6b52;--sage-l:#e8f0eb;--sage-d:#2f5540;
+  --amber:#c97b2a;--amber-l:#fdf3e3;
+  --red:#c0392b;--red-l:#fdecea;
+  --blue:#185FA5;--blue-l:#E6F1FB;
+  --purple:#534AB7;--purple-l:#EEEDFE;
+  --muted:#7a7870;--border:#e0ddd6;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--paper);color:var(--ink);display:flex;height:100vh;overflow:hidden}
+
+/* LEFT */
+.left{width:296px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh}
+.left-head{padding:16px 18px 12px;border-bottom:1px solid var(--border)}
+.logo{font-family:'DM Serif Display',serif;font-size:20px;color:var(--sage)}
+.logo em{font-style:italic;color:var(--amber)}
+.tagline{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:3px}
+.left-body{flex:1;overflow-y:auto;padding:14px 16px}
+.flabel{font-size:10px;font-family:'DM Mono',monospace;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:5px;margin-top:14px}
+.flabel:first-child{margin-top:0}
+input[type=text],textarea,.ipt{width:100%;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--ink);background:var(--paper);border:1.5px solid var(--border);border-radius:8px;padding:9px 11px;outline:none;resize:vertical;transition:border .15s;line-height:1.6}
+input[type=text]:focus,textarea:focus{border-color:var(--sage)}
+textarea{min-height:140px}
+select.ipt{cursor:pointer;font-family:'DM Mono',monospace;font-size:12px}
+.left-foot{padding:12px 16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:7px}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;font-family:'DM Sans',sans-serif;font-weight:500;font-size:13px;padding:9px 14px;border-radius:8px;border:none;cursor:pointer;transition:all .15s;width:100%}
+.btn-sage{background:var(--sage);color:#fff}.btn-sage:hover{background:var(--sage-d)}.btn-sage:disabled{opacity:.4;cursor:not-allowed}
+.btn-red{background:var(--red);color:#fff}.btn-red:hover{background:#a93226}
+.btn-out{background:transparent;border:1.5px solid var(--border);color:var(--ink)}.btn-out:hover{border-color:var(--sage);color:var(--sage)}
+
+/* RIGHT */
+.right{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.status-bar{padding:10px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--border);flex-shrink:0;transition:background .3s}
+.dot.running{background:var(--sage);animation:pg 1.5s infinite}
+.dot.waiting{background:var(--amber);animation:pa 1.2s infinite}
+.dot.done{background:var(--sage)}.dot.error{background:var(--red)}
+@keyframes pg{0%,100%{box-shadow:0 0 0 3px #c8dfd0}50%{box-shadow:0 0 0 6px #e8f0eb}}
+@keyframes pa{0%,100%{box-shadow:0 0 0 3px #f5dab8}50%{box-shadow:0 0 0 6px #fdf3e3}}
+.status-txt{font-size:12px;font-family:'DM Mono',monospace;color:var(--muted);flex:1}
+
+/* REVIEW BANNER */
+.review-banner{display:none;border-bottom:2px solid var(--amber);flex-shrink:0}
+.review-banner.show{display:block}
+.review-inner{background:var(--amber-l);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.review-title{font-family:'DM Serif Display',serif;font-size:15px;color:var(--amber)}
+.review-sub{font-size:11px;color:var(--amber);opacity:.8;margin-top:2px}
+.btn-continue{background:var(--sage);color:#fff;font-size:13px;font-weight:500;padding:9px 22px;border-radius:8px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;transition:background .15s;white-space:nowrap}
+.btn-continue:hover{background:var(--sage-d)}
+.btn-continue:active{transform:scale(.97)}
+
+/* STUCK WARNING */
+.stuck-banner{display:none;background:var(--red-l);border-bottom:2px solid var(--red);padding:10px 18px;font-size:12px;color:var(--red);flex-shrink:0}
+.stuck-banner.show{display:block}
+
+/* TERMS TOAST */
+.terms-toast{display:none;background:var(--sage-l);border-bottom:1px solid #b8d4c0;padding:8px 18px;font-size:12px;color:var(--sage);flex-shrink:0;font-family:'DM Mono',monospace}
+.terms-toast.show{display:block}
+
+/* SECTIONS */
+.sections-wrap{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:9px}
+.sec-card{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--card)}
+.sec-head{padding:10px 13px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;gap:8px}
+.sec-head:hover{background:var(--paper)}
+.sec-left{display:flex;align-items:center;gap:8px;min-width:0}
+.sec-badge{font-family:'DM Mono',monospace;font-size:10px;padding:2px 8px;border-radius:20px;flex-shrink:0}
+.sec-badge.filling{background:var(--blue-l);color:var(--blue)}
+.sec-badge.done{background:var(--sage-l);color:var(--sage)}
+.sec-badge.waiting{background:var(--amber-l);color:var(--amber)}
+.sec-name{font-weight:500;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sec-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.sec-stats{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)}
+.sec-chev{font-size:10px;color:var(--muted);transition:transform .2s}
+.sec-chev.open{transform:rotate(180deg)}
+.sec-body{display:none;border-top:1px solid var(--border)}
+.sec-body.open{display:block}
+.field-row{display:grid;grid-template-columns:170px 1fr 52px;gap:8px;padding:6px 13px;border-bottom:1px solid var(--border);font-size:12px;align-items:start}
+.field-row:last-child{border-bottom:none}
+.fr-lbl{color:var(--muted);font-family:'DM Mono',monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr-val{line-height:1.5;word-break:break-word}
+.fr-st{font-family:'DM Mono',monospace;font-size:10px;text-align:right;flex-shrink:0}
+.ok{color:var(--sage)}.sk{color:var(--amber)}.fa{color:var(--red)}.fi{color:var(--blue)}
+
+/* LOG */
+.log-toggle{padding:7px 18px;border-top:1px solid var(--border);font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.log-toggle:hover{background:var(--paper)}
+.log-area{display:none;height:150px;overflow-y:auto;padding:8px 18px;flex-direction:column;gap:3px;border-top:1px solid var(--border);flex-shrink:0}
+.log-area.open{display:flex}
+.le{display:flex;gap:8px;font-size:11px;line-height:1.4;animation:fi2 .15s}
+@keyframes fi2{from{opacity:0}to{opacity:1}}
+.le-ts{font-family:'DM Mono',monospace;color:var(--muted);flex-shrink:0;font-size:10px}
+.le-msg{flex:1;word-break:break-word}
+.le.info .le-msg{color:var(--ink)}.le.success .le-msg{color:var(--sage);font-weight:500}
+.le.warn .le-msg{color:var(--amber)}.le.error .le-msg{color:var(--red)}
+.le.ai .le-msg{color:var(--purple)}.le.system .le-msg{color:var(--muted)}
+.le.human .le-msg{color:var(--amber);font-weight:500}
+
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:8px;font-size:13px;padding:48px 0;text-align:center}
+.empty-icon{font-size:26px;opacity:.3}
+
+/* DONE BANNER */
+.done-banner{display:none;background:var(--sage-l);border-bottom:1px solid #b8d4c0;padding:14px 18px;flex-shrink:0}
+.done-banner.show{display:block}
+.done-title{font-family:'DM Serif Display',serif;font-size:16px;color:var(--sage)}
+.done-sub{font-size:12px;color:var(--sage);margin-top:3px;opacity:.8}
+</style>
+</head>
+<body>
+
+<div class="left">
+  <div class="left-head">
+    <div class="logo">Grant<em>Agent</em></div>
+    <div class="tagline">multi-section · auto-fill · terms auto-check</div>
+  </div>
+  <div class="left-body">
+    <div class="flabel">Grant website URL</div>
+    <input type="text" id="grant-url" placeholder="https://bharatimpact.accubate.app/..."/>
+    <div class="flabel">Grant name</div>
+    <input type="text" id="grant-name" placeholder="e.g. Social Entrepreneur of the Year"/>
+    <div class="flabel">AI model</div>
+    <select class="ipt" id="model-select">
+      <option value="llama3">llama3 (recommended)</option>
+      <option value="mistral">mistral (faster)</option>
+      <option value="llama3:8b">llama3:8b (lightest)</option>
+      <option value="llama3:70b">llama3:70b (best quality)</option>
+    </select>
+    <div class="flabel">Company profile</div>
+
+    <div id="excel-zone" style="border:2px dashed var(--border);border-radius:9px;padding:14px 12px;text-align:center;cursor:pointer;transition:border .15s;margin-bottom:8px" onclick="document.getElementById('excel-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--sage)'" ondragleave="this.style.borderColor=''" ondrop="handleDrop(event)">
+      <input type="file" id="excel-input" accept=".xlsx,.xls" style="display:none" onchange="uploadExcel(this.files[0])"/>
+      <div style="font-size:20px;margin-bottom:4px;opacity:.4">&#128202;</div>
+      <div id="excel-label" style="font-size:12px;color:var(--muted)">Drop <strong>GrantAgent_Profile.xlsx</strong> here or click to browse</div>
+    </div>
+
+    <div id="profile-loaded" style="display:none;background:var(--sage-l);border:1px solid #b8d4c0;border-radius:8px;padding:9px 12px;margin-bottom:8px">
+      <div style="font-size:12px;font-weight:500;color:var(--sage)" id="profile-badge-title">Profile loaded</div>
+      <div style="font-size:11px;color:var(--sage);opacity:.8;margin-top:2px" id="profile-badge-sub"></div>
+      <div id="grants-list" style="margin-top:6px"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin:6px 0">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace">or type manually</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+
+    <textarea id="company-profile" style="min-height:70px" placeholder="If not using Excel, paste your company profile here..."></textarea>
+  </div>
+  <div class="left-foot">
+    <button class="btn btn-sage" id="run-btn" onclick="runAgent()">▶ Start agent</button>
+    <button class="btn btn-red" id="stop-btn" style="display:none" onclick="stopAgent()">■ Stop agent</button>
+    <button class="btn btn-out" onclick="clearAll()">Clear all</button>
+  </div>
+</div>
+
+<div class="right">
+  <div class="status-bar">
+    <div class="dot" id="dot"></div>
+    <div class="status-txt" id="status-txt">Ready — configure and start the agent</div>
+  </div>
+
+  <!-- Terms auto-checked toast -->
+  <div class="terms-toast" id="terms-toast"></div>
+
+  <!-- Stuck warning -->
+  <div class="stuck-banner" id="stuck-banner">
+    ⚠ The form may have validation errors. Fix them in Chrome, then click Continue.
+  </div>
+
+  <!-- Human review banner -->
+  <div class="review-banner" id="review-banner">
+    <div class="review-inner">
+      <div>
+        <div class="review-title" id="review-title">Review section in Chrome</div>
+        <div class="review-sub">Check filled fields, fix anything if needed, then click Continue →</div>
+      </div>
+      <button class="btn-continue" id="continue-btn" onclick="humanContinue()">Continue →</button>
+    </div>
+  </div>
+
+  <!-- Done banner -->
+  <div class="done-banner" id="done-banner">
+    <div class="done-title">All sections filled ✓</div>
+    <div class="done-sub">Agent has completed the entire form. Review in Chrome and click Submit when ready.</div>
+  </div>
+
+  <div class="sections-wrap" id="sections-wrap">
+    <div class="empty" id="empty-state">
+      <div class="empty-icon">⬡</div>
+      <div>Sections appear here as the agent fills them</div>
+      <div style="font-size:11px;opacity:.6;margin-top:4px">Terms &amp; Conditions checkboxes are ticked automatically</div>
+    </div>
+  </div>
+
+  <div class="log-toggle" onclick="toggleLog()">
+    <span id="log-lbl">▸ Activity log</span>
+    <span id="log-ct" style="font-size:10px;opacity:.6"></span>
+  </div>
+  <div class="log-area" id="log-area"></div>
+</div>
+
+<script>
+const socket = io();
+let logOpen = false, logCt = 0, curSec = 0;
+
+function setStatus(txt, state='idle'){
+  document.getElementById('status-txt').textContent = txt;
+  const d = document.getElementById('dot');
+  d.className = 'dot'+(state==='running'?' running':state==='waiting'?' waiting':state==='done'?' done':state==='error'?' error':'');
+}
+function addLog(msg,type='info'){
+  logCt++;
+  document.getElementById('log-ct').textContent = logCt;
+  const a = document.getElementById('log-area');
+  const ts = new Date().toTimeString().slice(0,8);
+  const el = document.createElement('div');
+  el.className=`le ${type}`;
+  el.innerHTML=`<span class="le-ts">${ts}</span><span class="le-msg">${msg}</span>`;
+  a.appendChild(el); a.scrollTop=a.scrollHeight;
+}
+function toggleLog(){
+  logOpen=!logOpen;
+  document.getElementById('log-area').classList.toggle('open',logOpen);
+  document.getElementById('log-lbl').textContent=(logOpen?'▾ Hide':'▸ Show')+' activity log';
+}
+function clearAll(){
+  document.getElementById('sections-wrap').innerHTML='<div class="empty" id="empty-state"><div class="empty-icon">⬡</div><div>Sections appear here as the agent fills them</div></div>';
+  document.getElementById('log-area').innerHTML='';
+  document.getElementById('review-banner').classList.remove('show');
+  document.getElementById('done-banner').classList.remove('show');
+  document.getElementById('stuck-banner').classList.remove('show');
+  document.getElementById('terms-toast').classList.remove('show');
+  curSec=0; logCt=0; document.getElementById('log-ct').textContent='';
+  setStatus('Ready');
+}
+function resetUI(){
+  document.getElementById('run-btn').style.display='';
+  document.getElementById('stop-btn').style.display='none';
+  document.getElementById('review-banner').classList.remove('show');
+  setStatus('Stopped');
+}
+function runAgent(){
+  const url=document.getElementById('grant-url').value.trim();
+  const manualProfile=document.getElementById('company-profile').value.trim();
+  const grantName=document.getElementById('grant-name').value.trim();
+  const model=document.getElementById('model-select').value;
+  // Allow start if Excel was uploaded (cachedExcel) OR manual profile filled
+  if(!url){ addLog('Please enter a grant URL.','error'); return; }
+  const profileBadge = document.getElementById('profile-loaded');
+  const excelLoaded = profileBadge && profileBadge.style.display !== 'none';
+  if(!excelLoaded && !manualProfile){
+    addLog('Please upload your Excel profile or type a company profile below.','error');
+    document.getElementById('excel-zone').style.borderColor='var(--red)';
+    return;
+  }
+  clearAll();
+  document.getElementById('run-btn').style.display='none';
+  document.getElementById('stop-btn').style.display='';
+  setStatus('Launching agent...','running');
+  // Send manual profile only if no Excel loaded — server uses cachedProfile if companyProfile is empty
+  const body = { url, grantName, model };
+  if(manualProfile) body.companyProfile = manualProfile;
+  fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(r=>r.json()).then(d=>{if(d.error){addLog(d.error,'error');resetUI();}});
+}
+function stopAgent(){socket.emit('stop_agent');}
+function humanContinue(){
+  document.getElementById('review-banner').classList.remove('show');
+  document.getElementById('stuck-banner').classList.remove('show');
+  socket.emit('human_continue');
+  setStatus('Moving to next section...','running');
+}
+
+// Section helpers
+function mkSection(num, heading){
+  const wrap=document.getElementById('sections-wrap');
+  const empty=document.getElementById('empty-state');
+  if(empty)empty.remove();
+  const card=document.createElement('div');
+  card.className='sec-card'; card.id=`sec-${num}`;
+  card.innerHTML=`
+    <div class="sec-head" onclick="toggleSec(${num})">
+      <div class="sec-left">
+        <span class="sec-badge filling" id="sb-${num}">filling</span>
+        <span class="sec-name">§${num} — ${heading}</span>
+      </div>
+      <div class="sec-right">
+        <span class="sec-stats" id="ss-${num}"></span>
+        <span class="sec-chev open" id="sc-${num}">▾</span>
+      </div>
+    </div>
+    <div class="sec-body open" id="secb-${num}">
+      <div style="padding:10px 13px;font-size:12px;color:var(--muted);font-family:'DM Mono',monospace">Filling...</div>
+    </div>`;
+  wrap.appendChild(card);
+  wrap.scrollTop=wrap.scrollHeight;
+}
+function toggleSec(num){
+  const b=document.getElementById(`secb-${num}`), c=document.getElementById(`sc-${num}`);
+  const o=b.classList.contains('open');
+  b.classList.toggle('open',!o); c.classList.toggle('open',!o);
+}
+function setSectionDone(num,filled,total,results){
+  const b=document.getElementById(`sb-${num}`);
+  if(b){b.className='sec-badge done';b.textContent='done';}
+  const s=document.getElementById(`ss-${num}`);
+  if(s){
+    const skipped=results.filter(r=>r.status==='skipped').length;
+    const failed=results.filter(r=>!['filled','skipped'].includes(r.status)).length;
+    s.textContent=`${filled}✓ ${skipped}— ${failed}✗`;
+  }
+  const body=document.getElementById(`secb-${num}`);
+  if(body) body.innerHTML=results.map(r=>{
+    const sc=r.status==='filled'?'ok':r.status==='skipped'?'sk':'fa';
+    const icon=r.status==='filled'?'✓':r.status==='skipped'?'—':'✗';
+    const val=r.status==='filled'?String(r.answer||'').slice(0,100):(r.reason||r.status||'');
+    return `<div class="field-row">
+      <div class="fr-lbl" title="${r.label}">${r.label.slice(0,32)}</div>
+      <div class="fr-val">${val}</div>
+      <div class="fr-st ${sc}">${icon}</div>
+    </div>`;
+  }).join('');
+}
+
+// Socket events
+socket.on('log',({msg,type})=>addLog(msg,type||'info'));
+socket.on('status',s=>{
+  if(s==='navigating')setStatus('Opening grant website...','running');
+  if(s==='analysing')setStatus('AI reading form fields...','running');
+  if(s==='filling')setStatus('Auto-filling fields...','running');
+});
+socket.on('section_start',({num,heading,fieldCount})=>{
+  curSec=num; mkSection(num,heading);
+  setStatus(`Section ${num}: "${heading}"...`,'running');
+});
+socket.on('terms_checked',({count})=>{
+  const t=document.getElementById('terms-toast');
+  t.textContent=`✓ Auto-ticked ${count} Terms & Conditions checkbox${count>1?'es':''}`;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),4000);
+});
+socket.on('fill_start',({section,total,fields,heading})=>{
+  const body=document.getElementById(`secb-${section}`);
+  if(body) body.innerHTML=fields.map((f,i)=>`
+    <div class="field-row" id="fr-${section}-${i}">
+      <div class="fr-lbl" title="${f.label}">${f.label.slice(0,32)}</div>
+      <div class="fr-val" id="fv-${section}-${i}" style="color:var(--muted);font-style:italic">generating...</div>
+      <div class="fr-st fi" id="fs-${section}-${i}">…</div>
+    </div>`).join('');
+});
+socket.on('filling_field',({index,label,purpose,answer,section})=>{
+  const v=document.getElementById(`fv-${section}-${index}`);
+  const s=document.getElementById(`fs-${section}-${index}`);
+  if(v){v.textContent=String(answer).slice(0,100);v.style.fontStyle='normal';}
+  if(s){s.textContent='…';s.className='fr-st fi';}
+});
+
+socket.on('conditional_fields',({count,fields})=>{
+  addLog(`${count} conditional field(s) appeared: ${fields.join(', ')}`, 'ai');
+});
+socket.on('field_done',({index,status,value,reason,section})=>{
+  const s=document.getElementById(`fs-${section}-${index}`);
+  const v=document.getElementById(`fv-${section}-${index}`);
+  if(s){
+    const sc=status==='filled'?'ok':status==='skipped'?'sk':'fa';
+    s.className=`fr-st ${sc}`;
+    s.textContent=status==='filled'?'✓':status==='skipped'?'—':'✗';
+  }
+  if(v&&status==='filled'&&value)v.textContent=String(value).slice(0,100);
+});
+socket.on('section_filled',({num,filled,total,results})=>{
+  setSectionDone(num,filled,total,results);
+});
+socket.on('section_no_fields',({num,heading})=>{
+  const b=document.getElementById(`sb-${num}`);
+  if(b){b.className='sec-badge waiting';b.textContent='no fields';}
+  const body=document.getElementById(`secb-${num}`);
+  if(body)body.innerHTML='<div style="padding:10px 13px;font-size:12px;color:var(--muted)">No fillable fields found on this section.</div>';
+});
+socket.on('human_review',({section})=>{
+  setStatus('Waiting for your review — check Chrome then click Continue','waiting');
+  document.getElementById('review-title').textContent=`Review "${section}"`;
+  document.getElementById('review-banner').classList.add('show');
+  document.getElementById('sections-wrap').scrollTop=0;
+  // Update current section badge to "waiting"
+  const b=document.getElementById(`sb-${curSec}`);
+  if(b&&b.textContent==='filling'){b.className='sec-badge waiting';b.textContent='waiting';}
+});
+socket.on('human_review_done',()=>{
+  document.getElementById('review-banner').classList.remove('show');
+  setStatus('Moving to next section...','running');
+});
+socket.on('page_stuck',()=>{
+  document.getElementById('stuck-banner').classList.add('show');
+});
+socket.on('no_next_btn',()=>{
+  addLog('No Next button found — click it manually in Chrome, then Continue here.','warn');
+});
+socket.on('form_submitted',()=>{
+  setStatus('Form submitted successfully!','done');
+  document.getElementById('done-banner').querySelector('.done-title').textContent='Form submitted! ✓';
+  document.getElementById('done-banner').querySelector('.done-sub').textContent='Your application was submitted successfully.';
+  document.getElementById('done-banner').classList.add('show');
+  resetUI();
+});
+socket.on('agent_done_final',({totalFilled,totalSkipped,totalFailed,totalFields}={})=>{
+  const summary = totalFields ? `${totalFilled}/${totalFields} fields filled` : '';
+  document.getElementById('done-banner').querySelector('.done-sub').textContent = (summary ? summary + ' — ' : '') + 'Sheet updated. Review in Chrome and submit.';
+  document.getElementById('done-banner').classList.add('show');
+  resetUI(); setStatus('Agent finished — sheet updated','done');
+});
+socket.on('agent_stopped',()=>{addLog('Agent stopped.','warn');resetUI();});
+socket.on('agent_error',({error})=>{addLog('Error: '+error,'error');resetUI();setStatus('Error','error');});
+socket.on('sheet_updated',({grantName,status,filledCount,total})=>{
+  addLog(`Sheet updated: "${grantName}" → ${status} (${filledCount}/${total} fields)`, 'success');
+  // Update the grant button colour if visible
+  document.querySelectorAll('#grants-list button').forEach(btn => {
+    if(btn.textContent.trim() === grantName) {
+      btn.style.background = status === 'filled' ? 'var(--sage-l)' : status === 'error' ? 'var(--red-l)' : btn.style.background;
+    }
+  });
+});
+
+// ── Excel upload ──
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('excel-zone').style.borderColor='';
+  const file = e.dataTransfer.files[0];
+  if(file) uploadExcel(file);
+}
+
+async function uploadExcel(file){
+  if(!file) return;
+  const zone = document.getElementById('excel-zone');
+  document.getElementById('excel-label').textContent = 'Reading ' + file.name + '...';
+  zone.style.borderColor = 'var(--sage)';
+
+  const form = new FormData();
+  form.append('excel', file);
+  try {
+    const res = await fetch('/api/upload-profile', { method: 'POST', body: form });
+    const data = await res.json();
+    if(data.error){ alert('Error: ' + data.error); document.getElementById('excel-label').innerHTML = 'Drop <strong>GrantAgent_Profile.xlsx</strong> here or click to browse'; zone.style.borderColor='var(--red)'; return; }
+
+    // Success
+    zone.style.borderColor = 'var(--sage)';
+    zone.style.background = 'var(--sage-l)';
+    document.getElementById('excel-label').textContent = file.name + ' loaded';
+
+    document.getElementById('profile-loaded').style.display = 'block';
+    document.getElementById('profile-badge-title').textContent = 'Profile loaded — ' + data.fieldCount + ' fields';
+    document.getElementById('profile-badge-sub').textContent = data.pendingGrants + ' pending grant(s) detected';
+
+    // Show grant buttons
+    const gl = document.getElementById('grants-list');
+    gl.innerHTML = '';
+    (data.grants||[]).forEach(g => {
+      const btn = document.createElement('button');
+      btn.textContent = g.name;
+      btn.style.cssText = 'display:block;width:100%;text-align:left;background:var(--card);border:1px solid #b8d4c0;border-radius:6px;padding:5px 8px;font-size:11px;color:var(--sage);cursor:pointer;margin-top:4px;font-family:'DM Sans',sans-serif';
+      btn.onclick = () => {
+        document.getElementById('grant-url').value = g.url;
+        document.getElementById('grant-name').value = g.name;
+        addLog('Loaded grant: ' + g.name, 'system');
+      };
+      gl.appendChild(btn);
+    });
+    addLog('Excel profile loaded — ' + data.fieldCount + ' fields, ' + data.pendingGrants + ' pending grants', 'success');
+  } catch(e) { alert('Upload failed: ' + e.message); }
+}
+
+// Auto-load profile on page open
+fetch('/api/profile').then(r=>r.json()).then(data=>{
+  if(data.loaded){
+    document.getElementById('profile-loaded').style.display='block';
+    document.getElementById('profile-badge-title').textContent='Profile loaded — '+data.fieldCount+' fields';
+    document.getElementById('profile-badge-sub').textContent=data.pendingGrants+' pending grant(s)';
+    document.getElementById('excel-zone').style.borderColor='var(--sage)';
+    document.getElementById('excel-zone').style.background='var(--sage-l)';
+    document.getElementById('excel-label').textContent='Profile ready (re-upload to update)';
+    const gl=document.getElementById('grants-list');
+    (data.grants||[]).forEach(g=>{
+      const btn=document.createElement('button');
+      btn.textContent=g.name;
+      btn.style.cssText='display:block;width:100%;text-align:left;background:var(--card);border:1px solid #b8d4c0;border-radius:6px;padding:5px 8px;font-size:11px;color:var(--sage);cursor:pointer;margin-top:4px;font-family:'DM Sans',sans-serif';
+      btn.onclick=()=>{document.getElementById('grant-url').value=g.url;document.getElementById('grant-name').value=g.name;};
+      gl.appendChild(btn);
+    });
+  }
+}).catch(()=>{});
+</script>
+</body>
+</html>
